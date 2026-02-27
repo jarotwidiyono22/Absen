@@ -122,7 +122,8 @@
             charts: { pie: null, bar: null },
             ui: {
                 grades: { page: 1, limit: 5, search: '' },
-                reports: { page: 1, limit: 5, search: '' }
+                reports: { page: 1, limit: 5, search: '' },
+                remedial: { page: 1, limit: 5, search: '' }
             }
         };
 
@@ -705,7 +706,7 @@
             `;
         }
 
-        function renderRemedial() {
+        function renderRemedialTableContent() {
             let remedialList = [];
             state.grades.forEach(g => {
                 const kktp = g.kktp || 0;
@@ -730,7 +731,83 @@
                 }
             });
 
-            remedialList.sort((a,b) => b.date.localeCompare(a.date));
+            let filteredRemedial = remedialList.filter(r =>
+                r.studentName.toLowerCase().includes(state.ui.remedial.search.toLowerCase()) ||
+                r.className.toLowerCase().includes(state.ui.remedial.search.toLowerCase()) ||
+                r.assessmentName.toLowerCase().includes(state.ui.remedial.search.toLowerCase())
+            ).sort((a,b) => b.date.localeCompare(a.date));
+
+            const limit = state.ui.remedial.limit;
+            const totalPages = Math.ceil(filteredRemedial.length / limit);
+            if (state.ui.remedial.page > totalPages && totalPages > 0) state.ui.remedial.page = totalPages;
+            
+            const startIdx = (state.ui.remedial.page - 1) * limit;
+            const paginated = filteredRemedial.slice(startIdx, startIdx + limit);
+
+            return `
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left min-w-[1100px]">
+                        <thead class="bg-slate-50/50 text-slate-400 text-[10px] uppercase font-black tracking-[0.2em] border-b border-slate-50">
+                            <tr>
+                                <th class="px-6 py-8">Tanggal</th>
+                                <th class="px-6 py-8">Rombel</th>
+                                <th class="px-6 py-8">Nama Siswa</th>
+                                <th class="px-6 py-8">Jenis</th>
+                                <th class="px-6 py-8">Materi & Asessmen</th>
+                                <th class="px-6 py-8 text-center">Nilai</th>
+                                <th class="px-6 py-8 text-center">KKTP</th>
+                                <th class="px-6 py-8 text-center">Remedial Ke</th>
+                                <th class="px-6 py-8 text-center">Pengayaan</th>
+                                <th class="px-6 py-8 text-center">Keterangan</th>
+                                <th class="px-6 py-8 text-center">Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-50">
+                            ${paginated.length > 0 ? paginated.map((r, idx) => {
+                                // Unique ID based on data properties to ensure correct mapping during pagination
+                                const uniqueIdx = `${r.id}-${r.studentName.replace(/\\s+/g, '')}`;
+                                return `
+                                <tr class="hover:bg-rose-50/30 transition-colors group">
+                                    <td class="px-6 py-4 text-xs font-bold text-slate-400">${r.date}</td>
+                                    <td class="px-6 py-4"><span class="px-3 py-1 bg-orange-50 text-orange-600 rounded-lg font-black text-[10px] uppercase">${r.className}</span></td>
+                                    <td class="px-6 py-4 font-black text-slate-800 text-xs uppercase">${r.studentName}</td>
+                                    <td class="px-6 py-4 font-black text-purple-600 text-[10px] uppercase">${r.type}</td>
+                                    <td class="px-6 py-4 font-bold text-slate-600 text-xs">${r.assessmentName}</td>
+                                    <td class="px-6 py-4 text-center font-black text-rose-600 text-sm">${r.score}</td>
+                                    <td class="px-6 py-4 text-center font-black text-slate-400">${r.kktp}</td>
+                                    <td class="px-6 py-4 text-center">
+                                        <span class="w-8 h-8 inline-flex items-center justify-center bg-orange-100 text-orange-600 rounded-full font-black text-xs">${r.attempt}</span>
+                                    </td>
+                                    <td class="px-6 py-4 text-center">
+                                        <input type="number" id="rem-${uniqueIdx}" min="0" max="100" class="w-16 p-2 bg-slate-50 border-2 border-slate-200 focus:border-orange-500 rounded-xl outline-none font-black text-center text-xs" placeholder="Nilai">
+                                    </td>
+                                    <td class="px-6 py-4 text-center">
+                                        <input type="text" id="desc-${uniqueIdx}" class="w-32 p-2 bg-slate-50 border-2 border-slate-200 focus:border-orange-500 rounded-xl outline-none font-bold text-xs" placeholder="Keterangan guru">
+                                    </td>
+                                    <td class="px-6 py-4 text-center">
+                                        <button onclick="window.saveRemedial('${r.id}', '${r.studentName}', ${r.kktp}, 'rem-${uniqueIdx}', 'desc-${uniqueIdx}')" class="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-black text-[10px] uppercase transition-all shadow-md">Simpan</button>
+                                    </td>
+                                </tr>
+                            `}).join('') : '<tr><td colspan="11" class="px-10 py-20 text-center font-black text-slate-300 uppercase tracking-widest italic text-xs">Tidak ada siswa yang remedial atau data tidak ditemukan 🎉</td></tr>'}
+                        </tbody>
+                    </table>
+                </div>
+                <div class="px-8 pb-8">
+                    ${renderPagination(filteredRemedial.length, state.ui.remedial.page, limit, 'window.changeRemedialPage')}
+                </div>
+            `;
+        }
+
+        function renderRemedial() {
+            let remedialTotal = 0;
+            state.grades.forEach(g => {
+                const kktp = g.kktp || 0;
+                if(kktp > 0) {
+                    Object.entries(g.scores).forEach(([studentName, score]) => {
+                        if (Number(score) < kktp) remedialTotal++;
+                    });
+                }
+            });
 
             return `
                 <div class="space-y-8">
@@ -743,53 +820,30 @@
                             </div>
                         </div>
                         <div class="px-6 py-4 bg-rose-600 text-white rounded-2xl font-black text-2xl shadow-xl">
-                            ${remedialList.length} <span class="text-xs font-bold opacity-80 uppercase tracking-widest">Siswa</span>
+                            ${remedialTotal} <span class="text-xs font-bold opacity-80 uppercase tracking-widest">Siswa</span>
                         </div>
                     </div>
 
-                    <div class="bg-white rounded-[2.5rem] shadow-sm overflow-x-auto border border-slate-50">
-                        <table class="w-full text-left min-w-[1100px]">
-                            <thead class="bg-slate-50/50 text-slate-400 text-[10px] uppercase font-black tracking-[0.2em] border-b border-slate-50">
-                                <tr>
-                                    <th class="px-6 py-8">Tanggal</th>
-                                    <th class="px-6 py-8">Rombel</th>
-                                    <th class="px-6 py-8">Nama Siswa</th>
-                                    <th class="px-6 py-8">Jenis</th>
-                                    <th class="px-6 py-8">Materi & Asessmen</th>
-                                    <th class="px-6 py-8 text-center">Nilai</th>
-                                    <th class="px-6 py-8 text-center">KKTP</th>
-                                    <th class="px-6 py-8 text-center">Remedial Ke</th>
-                                    <th class="px-6 py-8 text-center">Pengayaan</th>
-                                    <th class="px-6 py-8 text-center">Keterangan</th>
-                                    <th class="px-6 py-8 text-center">Aksi</th>
-                                </tr>
-                            </thead>
-                            <tbody class="divide-y divide-slate-50">
-                                ${remedialList.length > 0 ? remedialList.map((r, idx) => `
-                                    <tr class="hover:bg-rose-50/30 transition-colors group">
-                                        <td class="px-6 py-4 text-xs font-bold text-slate-400">${r.date}</td>
-                                        <td class="px-6 py-4"><span class="px-3 py-1 bg-orange-50 text-orange-600 rounded-lg font-black text-[10px] uppercase">${r.className}</span></td>
-                                        <td class="px-6 py-4 font-black text-slate-800 text-xs uppercase">${r.studentName}</td>
-                                        <td class="px-6 py-4 font-black text-purple-600 text-[10px] uppercase">${r.type}</td>
-                                        <td class="px-6 py-4 font-bold text-slate-600 text-xs">${r.assessmentName}</td>
-                                        <td class="px-6 py-4 text-center font-black text-rose-600 text-sm">${r.score}</td>
-                                        <td class="px-6 py-4 text-center font-black text-slate-400">${r.kktp}</td>
-                                        <td class="px-6 py-4 text-center">
-                                            <span class="w-8 h-8 inline-flex items-center justify-center bg-orange-100 text-orange-600 rounded-full font-black text-xs">${r.attempt}</span>
-                                        </td>
-                                        <td class="px-6 py-4 text-center">
-                                            <input type="number" id="rem-${r.id}-${idx}" min="0" max="100" class="w-16 p-2 bg-slate-50 border-2 border-slate-200 focus:border-orange-500 rounded-xl outline-none font-black text-center text-xs" placeholder="Nilai">
-                                        </td>
-                                        <td class="px-6 py-4 text-center">
-                                            <input type="text" id="desc-${r.id}-${idx}" class="w-32 p-2 bg-slate-50 border-2 border-slate-200 focus:border-orange-500 rounded-xl outline-none font-bold text-xs" placeholder="Keterangan guru">
-                                        </td>
-                                        <td class="px-6 py-4 text-center">
-                                            <button onclick="window.saveRemedial('${r.id}', '${r.studentName}', ${r.kktp}, 'rem-${r.id}-${idx}', 'desc-${r.id}-${idx}')" class="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-black text-[10px] uppercase transition-all shadow-md">Simpan</button>
-                                        </td>
-                                    </tr>
-                                `).join('') : '<tr><td colspan="11" class="px-10 py-20 text-center font-black text-slate-300 uppercase tracking-widest italic text-xs">Tidak ada siswa yang remedial 🎉</td></tr>'}
-                            </tbody>
-                        </table>
+                    <div class="bg-white rounded-[2.5rem] shadow-sm overflow-hidden border border-slate-50">
+                        <div class="p-8 border-b border-slate-50 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
+                            <h4 class="font-black text-slate-800 uppercase italic text-sm">Daftar Siswa Remedial</h4>
+                            
+                            <div class="flex flex-col sm:flex-row items-center gap-4 w-full lg:w-auto">
+                                <select onchange="window.changeRemedialLimit(this.value)" class="w-full sm:w-auto border border-slate-100 rounded-xl p-3 bg-slate-50 outline-none focus:ring-2 focus:ring-orange-100 font-bold text-xs uppercase tracking-widest text-slate-500 cursor-pointer appearance-none">
+                                    <option value="5" ${state.ui.remedial.limit === 5 ? 'selected' : ''}>5 Baris</option>
+                                    <option value="10" ${state.ui.remedial.limit === 10 ? 'selected' : ''}>10 Baris</option>
+                                    <option value="25" ${state.ui.remedial.limit === 25 ? 'selected' : ''}>25 Baris</option>
+                                </select>
+                                <div class="relative w-full sm:w-64">
+                                    <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"></i>
+                                    <input type="text" placeholder="Cari siswa/materi/kelas..." oninput="window.handleRemedialSearch(this.value)" value="${state.ui.remedial.search}" class="w-full border border-slate-100 rounded-xl p-3 pl-10 bg-slate-50 outline-none focus:ring-2 focus:ring-orange-100 font-bold text-xs text-slate-600 placeholder:text-slate-400 transition-all">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="remedialTableContainer">
+                            ${renderRemedialTableContent()}
+                        </div>
                     </div>
                 </div>
             `;
@@ -1252,6 +1306,26 @@
         window.changeReportsPage = (page) => {
             state.ui.reports.page = page;
             document.getElementById('reportsTableContainer').innerHTML = renderReportsTableContent();
+            lucide.createIcons();
+        };
+
+        window.changeRemedialLimit = (limit) => {
+            state.ui.remedial.limit = Number(limit);
+            state.ui.remedial.page = 1;
+            document.getElementById('remedialTableContainer').innerHTML = renderRemedialTableContent();
+            lucide.createIcons();
+        };
+
+        window.handleRemedialSearch = (val) => {
+            state.ui.remedial.search = val;
+            state.ui.remedial.page = 1;
+            document.getElementById('remedialTableContainer').innerHTML = renderRemedialTableContent();
+            lucide.createIcons();
+        };
+
+        window.changeRemedialPage = (page) => {
+            state.ui.remedial.page = page;
+            document.getElementById('remedialTableContainer').innerHTML = renderRemedialTableContent();
             lucide.createIcons();
         };
 
